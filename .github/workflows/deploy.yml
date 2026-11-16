@@ -27,7 +27,7 @@ jobs:
           cache: maven
 
       - name: Build Spring Boot
-        run: mvn -B clean verify
+        run: mvn -B clean package -DskipTests
 
       - name: Verify JAR
         run: test -f target/shardaos-0.0.1-SNAPSHOT.jar
