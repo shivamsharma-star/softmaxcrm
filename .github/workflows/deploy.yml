@@ -1,0 +1,75 @@
+
+name: Softmax Spring Boot CI/CD
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Build Spring Boot
+        run: mvn -B clean verify
+
+      - name: Verify JAR
+        run: test -f target/shardaos-0.0.1-SNAPSHOT.jar
+
+      - name: Setup SSH
+        env:
+          SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.SERVER_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Upload JAR
+        run: |
+          scp target/shardaos-0.0.1-SNAPSHOT.jar \
+            ubuntu@${{ secrets.SERVER_HOST }}:/tmp/softmax-new.jar
+
+      - name: Deploy with backup and rollback
+        run: |
+          ssh ubuntu@${{ secrets.SERVER_HOST }} 'bash -s' <<'REMOTE'
+            set -e
+
+            APP=/opt/softmax/shardaos-0.0.1-SNAPSHOT.jar
+            BACKUP=/opt/softmax/shardaos-previous.jar
+            NEW=/tmp/softmax-new.jar
+
+            sudo cp "$APP" "$BACKUP"
+            sudo install -o root -g root -m 644 "$NEW" "$APP"
+
+            if sudo systemctl restart softmax.service &&
+               sleep 10 &&
+               sudo systemctl is-active --quiet softmax.service; then
+              echo "Deployment successful"
+              rm -f "$NEW"
+            else
+              echo "Deployment failed. Rolling back..."
+              sudo cp "$BACKUP" "$APP"
+              sudo systemctl restart softmax.service
+              exit 1
+            fi
+          REMOTE
