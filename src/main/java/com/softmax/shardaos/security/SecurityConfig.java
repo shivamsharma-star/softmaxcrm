@@ -33,7 +33,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/test/**").permitAll()
                         .requestMatchers("/uploads/**").permitAll()
-                        .requestMatchers("/api/v1/external/**").permitAll() // ✅ ADD THIS LINE
+                        .requestMatchers("/api/v1/external/**").permitAll()
+                        .requestMatchers("/api/partner/register").permitAll()// ✅ ADD THIS LINE
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated()
                 )
